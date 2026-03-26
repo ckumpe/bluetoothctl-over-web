@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bluetoothctl Web UI</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #38bdf8;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    h1 .icon { font-size: 1.8rem; }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: .85rem;
+      margin-top: .25rem;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: .75rem;
+      padding: 1.25rem 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .card-title {
+      font-size: .75rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 1rem;
+    }
+
+    /* Adapter info */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: .75rem;
+    }
+    .info-item { display: flex; flex-direction: column; gap: .2rem; }
+    .info-label { font-size: .7rem; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
+    .info-value { font-size: .95rem; font-weight: 500; color: #e2e8f0; }
+    .badge {
+      display: inline-block;
+      padding: .15rem .55rem;
+      border-radius: 9999px;
+      font-size: .75rem;
+      font-weight: 600;
+    }
+    .badge-on  { background: #14532d; color: #4ade80; }
+    .badge-off { background: #1e1e2e; color: #64748b; border: 1px solid #334155; }
+
+    /* Toggle row */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .75rem 0;
+      border-bottom: 1px solid #334155;
+    }
+    .toggle-row:last-child { border-bottom: none; }
+
+    .toggle-info { display: flex; flex-direction: column; gap: .15rem; }
+    .toggle-label { font-size: .95rem; font-weight: 500; }
+    .toggle-desc  { font-size: .78rem; color: #64748b; }
+
+    /* Switch */
+    .switch { position: relative; display: inline-block; width: 3rem; height: 1.6rem; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0;
+      background: #334155;
+      border-radius: 9999px;
+      cursor: pointer;
+      transition: background .25s;
+    }
+    .slider::before {
+      content: "";
+      position: absolute;
+      height: 1.2rem; width: 1.2rem;
+      left: .2rem; bottom: .2rem;
+      background: #e2e8f0;
+      border-radius: 50%;
+      transition: transform .25s;
+    }
+    input:checked + .slider { background: #0284c7; }
+    input:checked + .slider::before { transform: translateX(1.4rem); }
+    input:disabled + .slider { opacity: .4; cursor: not-allowed; }
+
+    /* Pairing requests */
+    .empty-state {
+      text-align: center;
+      color: #475569;
+      padding: 1.5rem 0;
+      font-size: .9rem;
+    }
+
+    .pairing-item {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: .6rem;
+      padding: 1rem 1.25rem;
+      margin-bottom: .75rem;
+      display: flex;
+      flex-direction: column;
+      gap: .6rem;
+    }
+    .pairing-device {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+    .pairing-device .dev-name { font-weight: 600; font-size: .95rem; }
+    .pairing-device .dev-addr { font-size: .78rem; color: #64748b; }
+    .passkey {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: .2em;
+      color: #fbbf24;
+      text-align: center;
+      padding: .4rem;
+      background: #1c1a0e;
+      border-radius: .4rem;
+    }
+    .pairing-type { font-size: .8rem; color: #94a3b8; }
+
+    .btn-row { display: flex; gap: .75rem; }
+    .btn {
+      flex: 1;
+      padding: .55rem 1rem;
+      border: none;
+      border-radius: .5rem;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-confirm { background: #0284c7; color: #fff; }
+    .btn-reject  { background: #334155; color: #e2e8f0; }
+
+    /* Error banner */
+    .error-banner {
+      background: #450a0a;
+      border: 1px solid #7f1d1d;
+      color: #fca5a5;
+      border-radius: .6rem;
+      padding: .6rem 1rem;
+      font-size: .85rem;
+      margin-top: 1rem;
+      display: none;
+    }
+    .error-banner.visible { display: block; }
+
+    /* Status dot */
+    .dot {
+      display: inline-block;
+      width: .55rem; height: .55rem;
+      border-radius: 50%;
+      background: #64748b;
+      margin-right: .35rem;
+    }
+    .dot-green { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+
+    .refresh-note {
+      font-size: .7rem;
+      color: #475569;
+      text-align: right;
+      margin-top: .5rem;
+    }
+  </style>
+</head>
+<body>
+
+<h1><span class="icon">&#x1F4F6;</span> Bluetoothctl Web UI</h1>
+<p class="subtitle">Control the local Bluetooth adapter from your browser</p>
+
+<div id="errorBanner" class="error-banner"></div>
+
+<!-- Adapter status card -->
+<div class="card">
+  <div class="card-title">Adapter Status</div>
+  <div class="info-grid" id="adapterInfo">
+    <div class="info-item">
+      <span class="info-label">State</span>
+      <span class="info-value" id="infoState"><span class="badge badge-off">unknown</span></span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Name</span>
+      <span class="info-value" id="infoName">—</span>
+    </div>
+    <div class="info-item">
+      <span class="info-label">Address</span>
+      <span class="info-value" id="infoAddress">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- Controls card -->
+<div class="card">
+  <div class="card-title">Controls</div>
+
+  <div class="toggle-row">
+    <div class="toggle-info">
+      <span class="toggle-label">Discoverable</span>
+      <span class="toggle-desc">Allow nearby devices to find this adapter</span>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="switchDiscoverable" onchange="toggleDiscoverable(this)">
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="toggle-row">
+    <div class="toggle-info">
+      <span class="toggle-label">Pairable</span>
+      <span class="toggle-desc">Allow new devices to pair with this adapter</span>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="switchPairable" onchange="togglePairable(this)">
+      <span class="slider"></span>
+    </label>
+  </div>
+</div>
+
+<!-- Pairing requests card -->
+<div class="card">
+  <div class="card-title">
+    <span class="dot" id="pairingDot"></span>Pairing Requests
+  </div>
+  <div id="pairingList">
+    <div class="empty-state">No pending pairing requests</div>
+  </div>
+  <p class="refresh-note">Auto-refreshes every 2 seconds</p>
+</div>
+
+<script>
+  let _busy = false;
+
+  // -----------------------------------------------------------------------
+  // Polling
+  // -----------------------------------------------------------------------
+  async function poll() {
+    await Promise.all([fetchStatus(), fetchPairingRequests()]);
+  }
+
+  setInterval(poll, 2000);
+  poll();
+
+  // -----------------------------------------------------------------------
+  // Status
+  // -----------------------------------------------------------------------
+  async function fetchStatus() {
+    try {
+      const res = await fetch('/api/status');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      hideError();
+      applyStatus(data);
+    } catch (e) {
+      showError('Could not reach backend: ' + e.message);
+    }
+  }
+
+  function applyStatus(data) {
+    // State badge
+    const stateEl = document.getElementById('infoState');
+    if (data.powered) {
+      stateEl.innerHTML = '<span class="badge badge-on">Powered On</span>';
+    } else {
+      stateEl.innerHTML = '<span class="badge badge-off">Powered Off</span>';
+    }
+
+    document.getElementById('infoName').textContent    = data.name    || '—';
+    document.getElementById('infoAddress').textContent = data.address || '—';
+
+    // Sync toggle states (only if user is not currently dragging)
+    setToggle('switchDiscoverable', data.discoverable);
+    setToggle('switchPairable',     data.pairable);
+  }
+
+  function setToggle(id, value) {
+    const el = document.getElementById(id);
+    if (document.activeElement !== el) el.checked = value;
+  }
+
+  // -----------------------------------------------------------------------
+  // Discoverable / Pairable toggles
+  // -----------------------------------------------------------------------
+  async function toggleDiscoverable(el) {
+    await postToggle('/api/discoverable', el.checked, el);
+  }
+
+  async function togglePairable(el) {
+    await postToggle('/api/pairable', el.checked, el);
+  }
+
+  async function postToggle(url, enabled, el) {
+    el.disabled = true;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        el.checked = !enabled; // revert on failure
+        showError('Command failed – check that the adapter is powered on.');
+      }
+    } catch (e) {
+      el.checked = !enabled;
+      showError('Request failed: ' + e.message);
+    } finally {
+      el.disabled = false;
+      await fetchStatus();
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Pairing requests
+  // -----------------------------------------------------------------------
+  async function fetchPairingRequests() {
+    try {
+      const res = await fetch('/api/pairing-requests');
+      if (!res.ok) return;
+      const requests = await res.json();
+      renderPairingRequests(requests);
+    } catch (_) {}
+  }
+
+  function renderPairingRequests(requests) {
+    const container = document.getElementById('pairingList');
+    const dot = document.getElementById('pairingDot');
+
+    if (!requests.length) {
+      dot.className = 'dot';
+      container.innerHTML = '<div class="empty-state">No pending pairing requests</div>';
+      return;
+    }
+
+    dot.className = 'dot dot-green';
+    container.innerHTML = requests.map(req => {
+      const deviceName = req.device ? req.device.name    : 'Unknown device';
+      const deviceAddr = req.device ? req.device.address : '';
+      const passkeyHtml = req.passkey
+        ? `<div class="passkey">${escHtml(req.passkey)}</div>
+           <div class="pairing-type">Confirm that this passkey matches the one on the device.</div>`
+        : `<div class="pairing-type">Pairing request (${escHtml(req.type)})</div>`;
+
+      return `
+        <div class="pairing-item">
+          <div class="pairing-device">
+            <div>
+              <div class="dev-name">${escHtml(deviceName)}</div>
+              <div class="dev-addr">${escHtml(deviceAddr)}</div>
+            </div>
+          </div>
+          ${passkeyHtml}
+          <div class="btn-row">
+            <button class="btn btn-confirm" data-id="${escHtml(req.id)}" data-accepted="true">&#10003; Confirm</button>
+            <button class="btn btn-reject"  data-id="${escHtml(req.id)}" data-accepted="false">&#10007; Reject</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Attach event listeners after DOM is updated (avoids inline onclick XSS risk)
+    container.querySelectorAll('.btn[data-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        respondPairing(btn.dataset.id, btn.dataset.accepted === 'true');
+      });
+    });
+  }
+
+  async function respondPairing(id, accepted) {
+    try {
+      await fetch(`/api/pairing-requests/${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accepted })
+      });
+      await fetchPairingRequests();
+    } catch (e) {
+      showError('Failed to respond: ' + e.message);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Helpers
+  // -----------------------------------------------------------------------
+  function showError(msg) {
+    const el = document.getElementById('errorBanner');
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+
+  function hideError() {
+    document.getElementById('errorBanner').classList.remove('visible');
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
