@@ -1,1 +1,2 @@
 Flask>=3.0.0
+dbus-fast>=2.0.0

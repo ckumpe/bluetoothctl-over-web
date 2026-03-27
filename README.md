@@ -13,7 +13,7 @@ headless home server.
 ## Requirements
 
 - Python 3.8+
-- `bluetoothctl` available on the system (`sudo apt install bluez`)
+- BlueZ D-Bus service available on the system (`sudo apt install bluez`)
 
 ## Setup
 
@@ -21,8 +21,8 @@ headless home server.
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Start the server (needs access to bluetoothctl – run as a user in the
-# 'bluetooth' group or with appropriate permissions)
+# Start the server (needs D-Bus access to the BlueZ service – run as a user
+# in the 'bluetooth' group or with appropriate permissions)
 python app.py
 ```
 
