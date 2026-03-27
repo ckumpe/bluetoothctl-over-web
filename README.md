@@ -28,6 +28,18 @@ python app.py
 
 Then open <http://localhost:5000> in your browser.
 
+## Screenshots
+
+The UI automatically follows the system colour-scheme preference.
+
+**Dark theme** (default on dark-mode systems)
+
+![Dark theme](https://github.com/user-attachments/assets/10407616-5db1-4144-9206-3f5aae42c176)
+
+**Light theme** (used on light-mode systems)
+
+![Light theme](https://github.com/user-attachments/assets/4db48ca6-bc8d-423a-9327-438dab6f1dd2)
+
 ## Running as a systemd service
 
 ```ini

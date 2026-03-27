@@ -5,12 +5,81 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bluetoothctl Web UI</title>
   <style>
+    /* -----------------------------------------------------------------------
+       Theme tokens – dark (default) and light (prefers-color-scheme: light)
+    ----------------------------------------------------------------------- */
+    :root {
+      --bg-page:         #0f172a;
+      --bg-card:         #1e293b;
+      --bg-pairing-item: #0f172a;
+      --bg-passkey:      #1c1a0e;
+      --bg-badge-off:    #1e1e2e;
+      --bg-slider:       #334155;
+      --bg-error:        #450a0a;
+
+      --border-default:  #334155;
+      --border-error:    #7f1d1d;
+
+      --text-primary:    #e2e8f0;
+      --text-secondary:  #94a3b8;
+      --text-muted:      #64748b;
+      --text-faint:      #475569;
+
+      --accent:          #38bdf8;
+      --accent-btn:      #0284c7;
+
+      --badge-on-bg:     #14532d;
+      --badge-on-fg:     #4ade80;
+      --badge-off-fg:    #64748b;
+
+      --passkey-fg:      #fbbf24;
+      --error-fg:        #fca5a5;
+
+      --slider-thumb:    #e2e8f0;
+      --reject-btn-bg:   #334155;
+      --reject-btn-fg:   #e2e8f0;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg-page:         #f8fafc;
+        --bg-card:         #ffffff;
+        --bg-pairing-item: #f8fafc;
+        --bg-passkey:      #fef9c3;
+        --bg-badge-off:    #f1f5f9;
+        --bg-slider:       #cbd5e1;
+        --bg-error:        #fef2f2;
+
+        --border-default:  #e2e8f0;
+        --border-error:    #fca5a5;
+
+        --text-primary:    #0f172a;
+        --text-secondary:  #64748b;
+        --text-muted:      #94a3b8;
+        --text-faint:      #94a3b8;
+
+        --accent:          #0284c7;
+        --accent-btn:      #0284c7;
+
+        --badge-on-bg:     #dcfce7;
+        --badge-on-fg:     #166534;
+        --badge-off-fg:    #64748b;
+
+        --passkey-fg:      #d97706;
+        --error-fg:        #dc2626;
+
+        --slider-thumb:    #ffffff;
+        --reject-btn-bg:   #e2e8f0;
+        --reject-btn-fg:   #1e293b;
+      }
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f172a;
-      color: #e2e8f0;
+      background: var(--bg-page);
+      color: var(--text-primary);
       min-height: 100vh;
       padding: 1.5rem;
     }
@@ -18,7 +87,7 @@
     h1 {
       font-size: 1.6rem;
       font-weight: 700;
-      color: #38bdf8;
+      color: var(--accent);
       display: flex;
       align-items: center;
       gap: .5rem;
@@ -26,14 +95,14 @@
     h1 .icon { font-size: 1.8rem; }
 
     .subtitle {
-      color: #94a3b8;
+      color: var(--text-secondary);
       font-size: .85rem;
       margin-top: .25rem;
     }
 
     .card {
-      background: #1e293b;
-      border: 1px solid #334155;
+      background: var(--bg-card);
+      border: 1px solid var(--border-default);
       border-radius: .75rem;
       padding: 1.25rem 1.5rem;
       margin-top: 1.5rem;
@@ -44,7 +113,7 @@
       font-weight: 600;
       letter-spacing: .08em;
       text-transform: uppercase;
-      color: #64748b;
+      color: var(--text-muted);
       margin-bottom: 1rem;
     }
 
@@ -55,8 +124,8 @@
       gap: .75rem;
     }
     .info-item { display: flex; flex-direction: column; gap: .2rem; }
-    .info-label { font-size: .7rem; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
-    .info-value { font-size: .95rem; font-weight: 500; color: #e2e8f0; }
+    .info-label { font-size: .7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+    .info-value { font-size: .95rem; font-weight: 500; color: var(--text-primary); }
     .badge {
       display: inline-block;
       padding: .15rem .55rem;
@@ -64,8 +133,8 @@
       font-size: .75rem;
       font-weight: 600;
     }
-    .badge-on  { background: #14532d; color: #4ade80; }
-    .badge-off { background: #1e1e2e; color: #64748b; border: 1px solid #334155; }
+    .badge-on  { background: var(--badge-on-bg); color: var(--badge-on-fg); }
+    .badge-off { background: var(--bg-badge-off); color: var(--badge-off-fg); border: 1px solid var(--border-default); }
 
     /* Toggle row */
     .toggle-row {
@@ -73,20 +142,20 @@
       align-items: center;
       justify-content: space-between;
       padding: .75rem 0;
-      border-bottom: 1px solid #334155;
+      border-bottom: 1px solid var(--border-default);
     }
     .toggle-row:last-child { border-bottom: none; }
 
     .toggle-info { display: flex; flex-direction: column; gap: .15rem; }
     .toggle-label { font-size: .95rem; font-weight: 500; }
-    .toggle-desc  { font-size: .78rem; color: #64748b; }
+    .toggle-desc  { font-size: .78rem; color: var(--text-muted); }
 
     /* Switch */
     .switch { position: relative; display: inline-block; width: 3rem; height: 1.6rem; flex-shrink: 0; }
     .switch input { opacity: 0; width: 0; height: 0; }
     .slider {
       position: absolute; inset: 0;
-      background: #334155;
+      background: var(--bg-slider);
       border-radius: 9999px;
       cursor: pointer;
       transition: background .25s;
@@ -96,25 +165,25 @@
       position: absolute;
       height: 1.2rem; width: 1.2rem;
       left: .2rem; bottom: .2rem;
-      background: #e2e8f0;
+      background: var(--slider-thumb);
       border-radius: 50%;
       transition: transform .25s;
     }
-    input:checked + .slider { background: #0284c7; }
+    input:checked + .slider { background: var(--accent-btn); }
     input:checked + .slider::before { transform: translateX(1.4rem); }
     input:disabled + .slider { opacity: .4; cursor: not-allowed; }
 
     /* Pairing requests */
     .empty-state {
       text-align: center;
-      color: #475569;
+      color: var(--text-faint);
       padding: 1.5rem 0;
       font-size: .9rem;
     }
 
     .pairing-item {
-      background: #0f172a;
-      border: 1px solid #334155;
+      background: var(--bg-pairing-item);
+      border: 1px solid var(--border-default);
       border-radius: .6rem;
       padding: 1rem 1.25rem;
       margin-bottom: .75rem;
@@ -128,18 +197,18 @@
       gap: .5rem;
     }
     .pairing-device .dev-name { font-weight: 600; font-size: .95rem; }
-    .pairing-device .dev-addr { font-size: .78rem; color: #64748b; }
+    .pairing-device .dev-addr { font-size: .78rem; color: var(--text-muted); }
     .passkey {
       font-size: 1.6rem;
       font-weight: 700;
       letter-spacing: .2em;
-      color: #fbbf24;
+      color: var(--passkey-fg);
       text-align: center;
       padding: .4rem;
-      background: #1c1a0e;
+      background: var(--bg-passkey);
       border-radius: .4rem;
     }
-    .pairing-type { font-size: .8rem; color: #94a3b8; }
+    .pairing-type { font-size: .8rem; color: var(--text-secondary); }
 
     .btn-row { display: flex; gap: .75rem; }
     .btn {
@@ -153,14 +222,14 @@
       transition: opacity .15s;
     }
     .btn:hover { opacity: .85; }
-    .btn-confirm { background: #0284c7; color: #fff; }
-    .btn-reject  { background: #334155; color: #e2e8f0; }
+    .btn-confirm { background: var(--accent-btn); color: #fff; }
+    .btn-reject  { background: var(--reject-btn-bg); color: var(--reject-btn-fg); }
 
     /* Error banner */
     .error-banner {
-      background: #450a0a;
-      border: 1px solid #7f1d1d;
-      color: #fca5a5;
+      background: var(--bg-error);
+      border: 1px solid var(--border-error);
+      color: var(--error-fg);
       border-radius: .6rem;
       padding: .6rem 1rem;
       font-size: .85rem;
@@ -174,14 +243,14 @@
       display: inline-block;
       width: .55rem; height: .55rem;
       border-radius: 50%;
-      background: #64748b;
+      background: var(--text-muted);
       margin-right: .35rem;
     }
     .dot-green { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
 
     .refresh-note {
       font-size: .7rem;
-      color: #475569;
+      color: var(--text-faint);
       text-align: right;
       margin-top: .5rem;
     }
