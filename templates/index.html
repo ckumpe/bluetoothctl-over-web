@@ -248,21 +248,39 @@
   <div id="pairingList">
     <div class="empty-state">No pending pairing requests</div>
   </div>
-  <p class="refresh-note">Auto-refreshes every 2 seconds</p>
+  <p class="refresh-note">Live updates via server-sent events</p>
 </div>
 
 <script>
   let _busy = false;
 
   // -----------------------------------------------------------------------
-  // Polling
+  // Server-Sent Events
   // -----------------------------------------------------------------------
-  async function poll() {
-    await Promise.all([fetchStatus(), fetchPairingRequests()]);
+  function connectSSE() {
+    const source = new EventSource('/api/stream');
+
+    source.onopen = () => {
+      hideError();
+    };
+
+    source.onerror = () => {
+      showError('Connection lost. Reconnecting…');
+    };
+
+    source.addEventListener('status', (e) => {
+      const data = JSON.parse(e.data);
+      hideError();
+      applyStatus(data);
+    });
+
+    source.addEventListener('pairing_requests', (e) => {
+      const requests = JSON.parse(e.data);
+      renderPairingRequests(requests);
+    });
   }
 
-  setInterval(poll, 2000);
-  poll();
+  connectSSE();
 
   // -----------------------------------------------------------------------
   // Status
@@ -337,15 +355,6 @@
   // -----------------------------------------------------------------------
   // Pairing requests
   // -----------------------------------------------------------------------
-  async function fetchPairingRequests() {
-    try {
-      const res = await fetch('/api/pairing-requests');
-      if (!res.ok) return;
-      const requests = await res.json();
-      renderPairingRequests(requests);
-    } catch (_) {}
-  }
-
   function renderPairingRequests(requests) {
     const container = document.getElementById('pairingList');
     const dot = document.getElementById('pairingDot');
@@ -396,7 +405,6 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accepted })
       });
-      await fetchPairingRequests();
     } catch (e) {
       showError('Failed to respond: ' + e.message);
     }

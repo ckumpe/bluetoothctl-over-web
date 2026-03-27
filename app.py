@@ -1,11 +1,13 @@
 """bluetoothctl-over-web – Flask backend using dbus-fast / BlueZ D-Bus API."""
 
 import asyncio
+import json
+import queue
 import threading
 import time
 import uuid
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 # ---------------------------------------------------------------------------
 # D-Bus / BlueZ constants
@@ -179,6 +181,9 @@ class BluetoothManager:
         self._adapter_path: str | None = None
         # Cached org.freedesktop.DBus.Properties proxy for the adapter
         self._adapter_props = None
+        # SSE subscriber queues
+        self._sse_queues: set[queue.Queue] = set()
+        self._sse_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Startup
@@ -319,6 +324,7 @@ class BluetoothManager:
                 "future": fut,
             }
         print(f"[BT] Pairing request {req_id} ({req_type}) from {device_info}")
+        self._notify_clients("pairing_requests", self.get_pairing_requests())
         try:
             # shield() prevents wait_for from cancelling the underlying future
             # so respond_to_pairing can still resolve it after a timeout.
@@ -329,6 +335,34 @@ class BluetoothManager:
         finally:
             with self._lock:
                 self._pairing_requests.pop(req_id, None)
+            self._notify_clients("pairing_requests", self.get_pairing_requests())
+
+    # ------------------------------------------------------------------
+    # SSE subscriber management
+    # ------------------------------------------------------------------
+
+    def subscribe(self) -> "queue.Queue[tuple[str, object]]":
+        """Return a new queue that will receive (event_type, data) tuples."""
+        q: "queue.Queue[tuple[str, object]]" = queue.Queue(maxsize=100)
+        with self._sse_lock:
+            self._sse_queues.add(q)
+        return q
+
+    def unsubscribe(self, q: "queue.Queue") -> None:
+        """Remove *q* from the subscriber set."""
+        with self._sse_lock:
+            self._sse_queues.discard(q)
+
+    def _notify_clients(self, event_type: str, data: object) -> None:
+        """Push *data* to every active SSE subscriber queue."""
+        with self._sse_lock:
+            dead: set["queue.Queue"] = set()
+            for q in self._sse_queues:
+                try:
+                    q.put_nowait((event_type, data))
+                except queue.Full:
+                    dead.add(q)
+            self._sse_queues -= dead
 
     # ------------------------------------------------------------------
     # Helpers for Flask threads
@@ -467,6 +501,8 @@ def api_discoverable():
     data = request.get_json(force=True)
     enabled = bool(data.get("enabled", False))
     success = bt_manager.set_discoverable(enabled)
+    if success:
+        bt_manager._notify_clients("status", bt_manager.get_status())
     return jsonify({"success": success})
 
 
@@ -475,6 +511,8 @@ def api_pairable():
     data = request.get_json(force=True)
     enabled = bool(data.get("enabled", False))
     success = bt_manager.set_pairable(enabled)
+    if success:
+        bt_manager._notify_clients("status", bt_manager.get_status())
     return jsonify({"success": success})
 
 
@@ -489,6 +527,42 @@ def api_respond_pairing(request_id):
     accepted = bool(data.get("accepted", False))
     success = bt_manager.respond_to_pairing(request_id, accepted)
     return jsonify({"success": success})
+
+
+@app.route("/api/stream")
+def api_stream():
+    """Server-Sent Events endpoint – pushes status and pairing-request updates."""
+
+    def generate():
+        q = bt_manager.subscribe()
+        try:
+            # Send the current state immediately on connect
+            yield f"event: status\ndata: {json.dumps(bt_manager.get_status())}\n\n"
+            yield (
+                f"event: pairing_requests\n"
+                f"data: {json.dumps(bt_manager.get_pairing_requests())}\n\n"
+            )
+
+            while True:
+                try:
+                    event_type, data = q.get(timeout=15)
+                    yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+                except queue.Empty:
+                    # Keepalive comment to prevent proxy/browser timeouts
+                    yield ": keepalive\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            bt_manager.unsubscribe(q)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------
