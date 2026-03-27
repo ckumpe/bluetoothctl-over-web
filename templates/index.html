@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bluetoothctl Web UI</title>
+  <link rel="icon" href="/static/bluetooth-icon.svg" type="image/svg+xml">
   <style>
     /* -----------------------------------------------------------------------
        Theme tokens – dark (default) and light (prefers-color-scheme: light)
@@ -92,7 +93,7 @@
       align-items: center;
       gap: .5rem;
     }
-    h1 .icon { font-size: 1.8rem; }
+    h1 .icon { height: 1.8rem; width: 1.8rem; vertical-align: middle; }
 
     .subtitle {
       color: var(--text-secondary);
@@ -258,7 +259,7 @@
 </head>
 <body>
 
-<h1><span class="icon">&#x1F4F6;</span> Bluetoothctl Web UI</h1>
+<h1><img class="icon" src="/static/bluetooth-icon.svg" alt="Bluetooth"> Bluetoothctl Web UI</h1>
 <p class="subtitle">Control the local Bluetooth adapter from your browser</p>
 
 <div id="errorBanner" class="error-banner"></div>
