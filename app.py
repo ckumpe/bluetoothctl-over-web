@@ -244,27 +244,6 @@ class BluetoothManager:
         # Register the pairing agent with BlueZ
         await self._register_agent()
 
-        # Subscribe to PropertiesChanged signals to detect device connection changes
-        def _on_properties_changed(msg) -> None:
-            if (
-                msg.body
-                and msg.body[0] == DEVICE_IFACE
-                and "Connected" in msg.body[1]
-            ):
-                task = asyncio.create_task(self._notify_devices())
-                task.add_done_callback(
-                    lambda t: print(f"[BT] Error notifying devices: {t.exception()}")
-                    if not t.cancelled() and t.exception()
-                    else None
-                )
-
-        self._bus.subscribe(
-            sender=BLUEZ_SERVICE,
-            iface=PROPS_IFACE,
-            member="PropertiesChanged",
-            handler=_on_properties_changed,
-        )
-
         print(f"[BT] Ready – adapter {self._adapter_path}")
 
         # Keep the event loop alive indefinitely (daemon thread exits with app)
@@ -303,49 +282,6 @@ class BluetoothManager:
     # ------------------------------------------------------------------
     # Agent request handling (runs inside the event loop)
     # ------------------------------------------------------------------
-
-    async def _get_devices_async(self) -> list:
-        """Return a list of connected devices under the current adapter."""
-        try:
-            intro = await self._bus.introspect(BLUEZ_SERVICE, "/")
-            proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, "/", intro)
-            objmgr = proxy.get_interface(OBJMANAGER_IFACE)
-            objects = await objmgr.call_get_managed_objects()
-            devices = []
-            for path, ifaces in objects.items():
-                if DEVICE_IFACE not in ifaces:
-                    continue
-                if self._adapter_path and not path.startswith(
-                    self._adapter_path + "/"
-                ):
-                    continue
-                props = ifaces[DEVICE_IFACE]
-                connected = props.get("Connected", Variant("b", False)).value
-                paired = props.get("Paired", Variant("b", False)).value
-                if not connected:
-                    continue
-                address = props.get("Address", Variant("s", "")).value
-                name = props.get(
-                    "Name",
-                    props.get("Alias", Variant("s", "Unknown")),
-                ).value
-                devices.append(
-                    {
-                        "address": address,
-                        "name": name,
-                        "connected": connected,
-                        "paired": paired,
-                    }
-                )
-            return sorted(devices, key=lambda d: d["name"].lower())
-        except Exception as exc:
-            print(f"[BT] Error fetching devices: {exc}")
-            return []
-
-    async def _notify_devices(self) -> None:
-        """Fetch the current device list and push it to all SSE subscribers."""
-        devices = await self._get_devices_async()
-        self._notify_clients("devices", devices)
 
     async def _get_device_info(self, device_path: str) -> dict:
         """Fetch device name and address from the D-Bus Device1 interface."""
@@ -541,19 +477,6 @@ class BluetoothManager:
             return True
         return False
 
-    # ------------------------------------------------------------------
-    # Connected devices
-    # ------------------------------------------------------------------
-
-    def get_devices(self) -> list:
-        """Return a serialisable list of currently connected devices."""
-        if not self._loop or not self._adapter_path:
-            return []
-        try:
-            return self._run_async(self._get_devices_async())
-        except Exception:
-            return []
-
 
 # ---------------------------------------------------------------------------
 # Flask application
@@ -598,11 +521,6 @@ def api_pairing_requests():
     return jsonify(bt_manager.get_pairing_requests())
 
 
-@app.route("/api/devices")
-def api_devices():
-    return jsonify(bt_manager.get_devices())
-
-
 @app.route("/api/pairing-requests/<request_id>", methods=["POST"])
 def api_respond_pairing(request_id):
     data = request.get_json(force=True)
@@ -624,7 +542,6 @@ def api_stream():
                 f"event: pairing_requests\n"
                 f"data: {json.dumps(bt_manager.get_pairing_requests())}\n\n"
             )
-            yield f"event: devices\ndata: {json.dumps(bt_manager.get_devices())}\n\n"
 
             while True:
                 try:

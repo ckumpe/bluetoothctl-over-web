@@ -255,22 +255,6 @@
       text-align: right;
       margin-top: .5rem;
     }
-
-    /* Connected devices */
-    .device-list { display: flex; flex-direction: column; gap: .5rem; }
-    .device-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: var(--bg-pairing-item);
-      border: 1px solid var(--border-default);
-      border-radius: .6rem;
-      padding: .75rem 1rem;
-    }
-    .device-info { display: flex; flex-direction: column; gap: .15rem; }
-    .device-name { font-weight: 600; font-size: .95rem; }
-    .device-addr { font-size: .78rem; color: var(--text-muted); }
-    .device-badges { display: flex; gap: .4rem; align-items: center; }
   </style>
 </head>
 <body>
@@ -337,15 +321,6 @@
   <p class="refresh-note">Live updates via server-sent events</p>
 </div>
 
-<!-- Connected devices card -->
-<div class="card">
-  <div class="card-title">Connected Devices</div>
-  <div id="deviceList">
-    <div class="empty-state">No connected devices</div>
-  </div>
-  <p class="refresh-note">Live updates via server-sent events</p>
-</div>
-
 <script>
   let _busy = false;
 
@@ -372,11 +347,6 @@
     source.addEventListener('pairing_requests', (e) => {
       const requests = JSON.parse(e.data);
       renderPairingRequests(requests);
-    });
-
-    source.addEventListener('devices', (e) => {
-      const devices = JSON.parse(e.data);
-      renderDevices(devices);
     });
   }
 
@@ -508,29 +478,6 @@
     } catch (e) {
       showError('Failed to respond: ' + e.message);
     }
-  }
-
-  // -----------------------------------------------------------------------
-  // Connected devices
-  // -----------------------------------------------------------------------
-  function renderDevices(devices) {
-    const container = document.getElementById('deviceList');
-
-    if (!devices.length) {
-      container.innerHTML = '<div class="empty-state">No connected devices</div>';
-      return;
-    }
-
-    container.innerHTML = '<div class="device-list">' + devices.map(dev => `
-      <div class="device-item">
-        <div class="device-info">
-          <span class="device-name">${escHtml(dev.name)}</span>
-          <span class="device-addr">${escHtml(dev.address)}</span>
-        </div>
-        <div class="device-badges">
-          ${dev.paired ? '<span class="badge badge-on">Paired</span>' : ''}
-        </div>
-      </div>`).join('') + '</div>';
   }
 
   // -----------------------------------------------------------------------
