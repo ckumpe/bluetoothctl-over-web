@@ -1,0 +1,38 @@
+[Unit]
+Description=bluetoothctl-over-web – Web UI for BlueZ via D-Bus
+Documentation=https://github.com/ckumpe/bluetoothctl-over-web
+# Require the Bluetooth daemon and D-Bus before starting.
+After=bluetooth.service dbus.service network.target
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+
+# --- User / security ---
+# The process needs access to the system D-Bus and BlueZ.
+# Running as root is the simplest option; tighten once the
+# deployment is validated (e.g. add the user to the bluetooth group
+# and grant D-Bus policy access).
+User=root
+Group=root
+
+# --- Working directory & command ---
+# Adjust WorkingDirectory and the Python path to match your installation.
+WorkingDirectory=/opt/bluetoothctl-over-web
+ExecStart=/opt/bluetoothctl-over-web/.venv/bin/python app.py --log-level INFO
+
+# Restart the service automatically on failure.
+Restart=on-failure
+RestartSec=5s
+
+# --- Logging ---
+# Route stdout/stderr to the journal so that the syslog priority prefixes
+# emitted by SdJournalFormatter are recognised by journald.
+# Use `journalctl -u bluetoothctl-over-web` to view the logs, and
+# `journalctl -u bluetoothctl-over-web -p warning` to filter by level.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bluetoothctl-over-web
+
+[Install]
+WantedBy=multi-user.target

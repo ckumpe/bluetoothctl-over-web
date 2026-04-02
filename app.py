@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import queue
 import threading
 import time
@@ -12,6 +13,34 @@ import uuid
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+# Mapping from Python log levels to syslog/journald priority prefixes.
+# journald reads these SD_* prefixes from stdout/stderr when
+# StandardOutput=journal (or stdout) is set in the unit file.
+_SYSLOG_PRIORITY = {
+    logging.CRITICAL: "<2>",  # LOG_CRIT
+    logging.ERROR: "<3>",     # LOG_ERR
+    logging.WARNING: "<4>",   # LOG_WARNING
+    logging.INFO: "<6>",      # LOG_INFO
+    logging.DEBUG: "<7>",     # LOG_DEBUG
+}
+
+
+class SdJournalFormatter(logging.Formatter):
+    """Formatter that prepends each message with a syslog priority prefix.
+
+    systemd's journald recognises the ``<N>`` prefix on lines written to
+    stdout/stderr and stores the message under the correct log priority,
+    making ``journalctl -p warning`` etc. work as expected.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        prefix = _SYSLOG_PRIORITY.get(record.levelno, "<6>")
+        return prefix + super().format(record)
 
 # ---------------------------------------------------------------------------
 # D-Bus / BlueZ constants
@@ -690,6 +719,15 @@ if __name__ == "__main__":
         level=getattr(logging, args.log_level),
         format="%(levelname)s %(name)s: %(message)s",
     )
+
+    # When running under systemd, replace the root handler's formatter with
+    # SdJournalFormatter so journald can map each line to the correct priority.
+    # systemd sets the JOURNAL_STREAM environment variable for units that have
+    # StandardOutput=journal (or stdout/inherit when connected to the journal).
+    if os.environ.get("JOURNAL_STREAM"):
+        sd_formatter = SdJournalFormatter("%(levelname)s %(name)s: %(message)s")
+        for handler in logging.root.handlers:
+            handler.setFormatter(sd_formatter)
 
     # Route Werkzeug access logs through the root logger so they share the
     # same format and respect --log-level (e.g. hidden at WARNING and above).
