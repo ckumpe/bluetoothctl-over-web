@@ -725,7 +725,7 @@ if __name__ == "__main__":
     # systemd sets the JOURNAL_STREAM environment variable for units that have
     # StandardOutput=journal (or stdout/inherit when connected to the journal).
     if os.environ.get("JOURNAL_STREAM"):
-        sd_formatter = SdJournalFormatter("%(levelname)s %(name)s: %(message)s")
+        sd_formatter = SdJournalFormatter("%(name)s: %(message)s")
         for handler in logging.root.handlers:
             handler.setFormatter(sd_formatter)
 
