@@ -688,7 +688,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(
         level=getattr(logging, args.log_level),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        format="%(levelname)s %(name)s: %(message)s",
     )
 
     # Route Werkzeug access logs through the root logger so they share the
