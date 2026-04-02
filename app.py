@@ -691,5 +691,11 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    # Route Werkzeug access logs through the root logger so they share the
+    # same format and respect --log-level (e.g. hidden at WARNING and above).
+    werkzeug_logger = logging.getLogger("werkzeug")
+    werkzeug_logger.handlers.clear()
+    werkzeug_logger.setLevel(getattr(logging, args.log_level))
+
     bt_manager.start()
     app.run(host="0.0.0.0", port=5000, debug=False)
