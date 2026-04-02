@@ -1,13 +1,17 @@
 """bluetoothctl-over-web – Flask backend using dbus-fast / BlueZ D-Bus API."""
 
+import argparse
 import asyncio
 import json
+import logging
 import queue
 import threading
 import time
 import uuid
 
 from flask import Flask, Response, jsonify, render_template, request, stream_with_context
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # D-Bus / BlueZ constants
@@ -78,11 +82,11 @@ class PairingAgent(ServiceInterface):
 
     @dbus_method()
     def Release(self) -> None:  # noqa: N802
-        print("[Agent] Released by BlueZ")
+        logger.debug("Released by BlueZ")
 
     @dbus_method()
     def Cancel(self) -> None:  # noqa: N802
-        print("[Agent] Cancelled by BlueZ")
+        logger.debug("Cancelled by BlueZ")
 
     @dbus_method()
     async def RequestConfirmation(  # noqa: N802
@@ -204,29 +208,29 @@ class BluetoothManager:
         try:
             loop.run_until_complete(self._async_main())
         except Exception as exc:  # pragma: no cover
-            print(f"[BT] Fatal error in D-Bus thread: {exc}")
+            logger.critical("Fatal error in D-Bus thread: %s", exc)
 
     async def _async_main(self) -> None:
         if not _DBUS_AVAILABLE:
-            print("[BT] dbus-fast is not installed – Bluetooth unavailable")
+            logger.warning("dbus-fast is not installed – Bluetooth unavailable")
             return
 
         # Connect to the system D-Bus
         try:
             self._bus = await AsyncMessageBus(bus_type=BusType.SYSTEM).connect()
-            print("[BT] Connected to system D-Bus")
+            logger.info("Connected to system D-Bus")
         except Exception as exc:
-            print(f"[BT] Cannot connect to system D-Bus: {exc}")
+            logger.error("Cannot connect to system D-Bus: %s", exc)
             return
 
         # Discover the first Bluetooth adapter
         self._adapter_path = await self._find_adapter()
         if not self._adapter_path:
-            print(f"[BT] No Bluetooth adapter found – retrying in {ADAPTER_RETRY_DELAY_S} s")
+            logger.warning("No Bluetooth adapter found – retrying in %d s", ADAPTER_RETRY_DELAY_S)
             await asyncio.sleep(ADAPTER_RETRY_DELAY_S)
             self._adapter_path = await self._find_adapter()
         if not self._adapter_path:
-            print("[BT] No Bluetooth adapter found; giving up")
+            logger.error("No Bluetooth adapter found; giving up")
             return
 
         # Cache the Properties proxy for efficient property reads/writes
@@ -239,7 +243,7 @@ class BluetoothManager:
             )
             self._adapter_props = proxy.get_interface(PROPS_IFACE)
         except Exception as exc:
-            print(f"[BT] Cannot introspect adapter at {self._adapter_path}: {exc}")
+            logger.error("Cannot introspect adapter at %s: %s", self._adapter_path, exc)
             return
 
         # Register the pairing agent with BlueZ
@@ -263,24 +267,24 @@ class BluetoothManager:
                 task.add_done_callback(
                     lambda t: None
                     if t.cancelled() or not t.exception()
-                    else print(f"[BT] Error notifying devices: {t.exception()}")
+                    else logger.error("Error notifying devices: %s", t.exception())
                 )
             elif iface_name == ADAPTER_IFACE:
                 task = asyncio.create_task(self._notify_status())
                 task.add_done_callback(
                     lambda t: None
                     if t.cancelled() or not t.exception()
-                    else print(f"[BT] Error notifying status: {t.exception()}")
+                    else logger.error("Error notifying status: %s", t.exception())
                 )
             return None
 
         try:
             self._bus.add_message_handler(_on_properties_changed)
-            print("[BT] Subscribed to PropertiesChanged signals")
+            logger.info("Subscribed to PropertiesChanged signals")
         except Exception as exc:
-            print(f"[BT] Warning: could not subscribe to PropertiesChanged: {exc}")
+            logger.warning("Could not subscribe to PropertiesChanged: %s", exc)
 
-        print(f"[BT] Ready – adapter {self._adapter_path}")
+        logger.info("Ready – adapter %s", self._adapter_path)
 
         # Keep the event loop alive indefinitely (daemon thread exits with app)
         await asyncio.get_running_loop().create_future()
@@ -296,7 +300,7 @@ class BluetoothManager:
                 if ADAPTER_IFACE in objects[path]:
                     return path
         except Exception as exc:
-            print(f"[BT] ObjectManager error: {exc}")
+            logger.error("ObjectManager error: %s", exc)
         return None
 
     async def _register_agent(self) -> None:
@@ -311,9 +315,9 @@ class BluetoothManager:
             agentmgr = proxy.get_interface(AGENTMANAGER_IFACE)
             await agentmgr.call_register_agent(AGENT_PATH, "KeyboardDisplay")
             await agentmgr.call_request_default_agent(AGENT_PATH)
-            print(f"[BT] Pairing agent registered at {AGENT_PATH}")
+            logger.info("Pairing agent registered at %s", AGENT_PATH)
         except Exception as exc:
-            print(f"[BT] Agent registration failed: {exc}")
+            logger.error("Agent registration failed: %s", exc)
 
     # ------------------------------------------------------------------
     # Agent request handling (runs inside the event loop)
@@ -354,7 +358,7 @@ class BluetoothManager:
                 )
             return sorted(devices, key=lambda d: d["name"].lower())
         except Exception as exc:
-            print(f"[BT] Error fetching devices: {exc}")
+            logger.error("Error fetching devices: %s", exc)
             return []
 
     async def _notify_devices(self) -> None:
@@ -407,14 +411,14 @@ class BluetoothManager:
                 "timestamp": time.time(),
                 "future": fut,
             }
-        print(f"[BT] Pairing request {req_id} ({req_type}) from {device_info}")
+        logger.info("Pairing request %s (%s) from %s", req_id, req_type, device_info)
         self._notify_clients("pairing_requests", self.get_pairing_requests())
         try:
             # shield() prevents wait_for from cancelling the underlying future
             # so respond_to_pairing can still resolve it after a timeout.
             return await asyncio.wait_for(asyncio.shield(fut), timeout=120.0)
         except asyncio.TimeoutError:
-            print(f"[BT] Pairing request {req_id} timed out")
+            logger.warning("Pairing request %s timed out", req_id)
             return False
         finally:
             with self._lock:
@@ -530,7 +534,7 @@ class BluetoothManager:
             )
             return True
         except Exception as exc:
-            print(f"[BT] Failed to set {prop}={value}: {exc}")
+            logger.error("Failed to set %s=%s: %s", prop, value, exc)
             return False
 
     # ------------------------------------------------------------------
@@ -673,5 +677,25 @@ def api_stream():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="bluetoothctl-over-web")
+    parser.add_argument(
+        "--log-level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Set the logging level (default: INFO)",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    # Route Werkzeug access logs through the root logger so they share the
+    # same format and respect --log-level (e.g. hidden at WARNING and above).
+    werkzeug_logger = logging.getLogger("werkzeug")
+    werkzeug_logger.handlers.clear()
+    werkzeug_logger.setLevel(getattr(logging, args.log_level))
+
     bt_manager.start()
     app.run(host="0.0.0.0", port=5000, debug=False)
